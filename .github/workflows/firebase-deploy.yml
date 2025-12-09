@@ -27,14 +27,14 @@ jobs:
 
       # Install and build frontend
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build frontend
         run: npm run build
 
       # Install functions dependencies
       - name: Install functions dependencies
-        run: cd functions && npm ci
+        run: cd functions && npm install
 
       # Deploy to production (main branch only)
       - name: Deploy to Production

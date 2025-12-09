@@ -137,29 +137,16 @@ The Blaze plan is pay-as-you-go with generous free tiers:
 3. Click the **Edit** (pencil) icon
 4. Add the following roles by clicking **+ Add another role**:
 
-| Role | Purpose |
-|------|---------|
-| **Firebase Admin SDK Administrator** | Firebase SDK access |
-| **Service Account Token Creator** | Create authentication tokens |
-| **Editor** | General project access (includes most needed permissions) |
+| # | Role | Purpose |
+|---|------|---------|
+| 1 | **Editor** | GCP resources access (Cloud Functions, Cloud Run, Storage, etc.) |
+| 2 | **Firebase Admin** | Full access to Firebase products |
+| 3 | **Firebase Admin SDK Administrator** | Firebase SDK read/write access |
+| 4 | **Service Account Token Creator** | Create OAuth2 tokens, sign blobs/JWTs |
 
 5. Click **Save**
 
-**Alternative (More Granular Permissions)**:
-
-If you prefer least-privilege access instead of Editor role, use these roles:
-
-| Role | Purpose |
-|------|---------|
-| Firebase Admin SDK Administrator | Firebase SDK access |
-| Service Account Token Creator | Create authentication tokens |
-| Service Account User | Run functions as service account |
-| Cloud Functions Admin | Deploy Cloud Functions |
-| Cloud Run Admin | Deploy Cloud Run services |
-| Artifact Registry Writer | Push container images |
-| Cloud Build Editor | Build functions |
-| Firebase Hosting Admin | Deploy hosting |
-| Storage Admin | Upload function code |
+⚠️ **Note**: All 4 roles are required. The Editor role alone is NOT sufficient - Firebase has its own permission system separate from GCP.
 
 ### Step 3: Create Service Account Key
 

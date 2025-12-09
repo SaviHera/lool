@@ -21,6 +21,9 @@ This document provides step-by-step instructions for setting up the complete CI/
 - Google Account with access to Google Cloud Console
 - GitHub Account with repository creation permissions
 - Basic understanding of Git commands
+- **Credit/Debit card for Firebase Blaze plan** (required for Cloud Functions)
+  - Note: Blaze plan is pay-as-you-go with generous free tiers
+  - Typical cost for small projects: $0/month (within free tier)
 
 ---
 
@@ -101,11 +104,51 @@ Enable the following APIs (APIs & Services → Library → Search & Enable):
 - https://console.cloud.google.com/apis/library/firebasehosting.googleapis.com?project=PROJECT_ID
 - https://console.cloud.google.com/apis/library/cloudbilling.googleapis.com?project=PROJECT_ID
 
-### Step 3: Set Up Billing
+### Step 3: Upgrade to Blaze Plan (Required for Functions)
 
-1. In Google Cloud Console, go to **Billing**
-2. Link a billing account to your project
-3. Firebase Functions require a Blaze (pay-as-you-go) plan
+⚠️ **IMPORTANT**: Firebase Functions require the **Blaze (pay-as-you-go)** billing plan. The free Spark plan does NOT support Cloud Functions.
+
+#### Option A: Upgrade via Firebase Console (Recommended)
+
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Select your project
+3. In the left sidebar, click on the **gear icon** ⚙️ → **Usage and billing**
+4. Click on **Details & settings**
+5. Click **Modify plan**
+6. Select **Blaze (pay as you go)**
+7. Follow the prompts to:
+   - Add or select a billing account
+   - Set a budget alert (recommended)
+8. Click **Purchase**
+
+#### Option B: Upgrade via Project Settings
+
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Select your project
+3. At the bottom of the left sidebar, you'll see your current plan (Spark)
+4. Click **Upgrade**
+5. Select **Blaze** plan
+6. Complete the billing setup
+
+#### Verify Billing is Active
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Select your project
+3. Go to **Billing**
+4. Confirm a billing account is linked and active
+
+#### Cost Considerations
+
+The Blaze plan is pay-as-you-go with generous free tiers:
+
+| Service | Free Tier (per month) |
+|---------|----------------------|
+| Cloud Functions Invocations | 2 million |
+| Cloud Functions GB-seconds | 400,000 |
+| Firebase Hosting Storage | 10 GB |
+| Firebase Hosting Transfer | 360 MB/day |
+
+💡 **Tip**: Set up budget alerts in Google Cloud Console to monitor spending.
 
 ---
 

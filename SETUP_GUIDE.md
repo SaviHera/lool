@@ -1,6 +1,6 @@
 # Setup Guide: Angular + Firebase CI/CD Pipeline
 
-This document provides step-by-step instructions for setting up the complete CI/CD infrastructure for the Lool Angular application with Firebase.
+This document provides step-by-step instructions for setting up a complete CI/CD infrastructure for an Angular application with Firebase Hosting and Cloud Functions.
 
 ---
 
@@ -11,8 +11,10 @@ This document provides step-by-step instructions for setting up the complete CI/
 3. [Firebase Project Setup](#firebase-project-setup)
 4. [Service Account Configuration](#service-account-configuration)
 5. [GitHub Secrets Configuration](#github-secrets-configuration)
-6. [Verify Deployment](#verify-deployment)
-7. [CI/CD Workflow Behavior](#cicd-workflow-behavior)
+6. [Project Configuration](#project-configuration)
+7. [Verify Deployment](#verify-deployment)
+8. [CI/CD Workflow Behavior](#cicd-workflow-behavior)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -34,7 +36,7 @@ This document provides step-by-step instructions for setting up the complete CI/
 1. Go to [GitHub](https://github.com) and sign in
 2. Click the **+** icon (top right) → **New repository**
 3. Configure repository:
-   - **Repository name**: `lool` (or your preferred name)
+   - **Repository name**: Enter your preferred project name
    - **Visibility**: Public or Private
    - **Initialize**: Do NOT add README, .gitignore, or license (we'll push existing code)
 4. Click **Create repository**
@@ -73,42 +75,17 @@ git push -u origin main
 
 1. Go to [Firebase Console](https://console.firebase.google.com)
 2. Click **Create a project** (or **Add project**)
-3. Enter project name (e.g., `looool`)
+3. Enter your project name
 4. Choose whether to enable Google Analytics (optional)
 5. Click **Create project**
 6. Wait for project creation to complete
-7. Note down the **Project ID** (visible in Project Settings)
+7. **Note down the Project ID** (visible in Project Settings) - you'll need this later
 
-### Step 2: Enable Required APIs
-
-Go to [Google Cloud Console](https://console.cloud.google.com) and select your Firebase project.
-
-Enable the following APIs (APIs & Services → Library → Search & Enable):
-
-| API Name | Purpose |
-|----------|---------|
-| Cloud Functions API | Deploy Firebase Functions |
-| Cloud Build API | Build Functions |
-| Cloud Run API | Run Functions v2 |
-| Artifact Registry API | Store Function containers |
-| Firebase Hosting API | Deploy web app |
-| Cloud Billing API | Billing verification |
-| Eventarc API | Functions event handling |
-| Pub/Sub API | Functions messaging |
-
-**Quick Links** (replace `PROJECT_ID` with your project ID):
-- https://console.cloud.google.com/apis/library/cloudfunctions.googleapis.com?project=PROJECT_ID
-- https://console.cloud.google.com/apis/library/cloudbuild.googleapis.com?project=PROJECT_ID
-- https://console.cloud.google.com/apis/library/run.googleapis.com?project=PROJECT_ID
-- https://console.cloud.google.com/apis/library/artifactregistry.googleapis.com?project=PROJECT_ID
-- https://console.cloud.google.com/apis/library/firebasehosting.googleapis.com?project=PROJECT_ID
-- https://console.cloud.google.com/apis/library/cloudbilling.googleapis.com?project=PROJECT_ID
-
-### Step 3: Upgrade to Blaze Plan (Required for Functions)
+### Step 2: Upgrade to Blaze Plan (Required for Functions)
 
 ⚠️ **IMPORTANT**: Firebase Functions require the **Blaze (pay-as-you-go)** billing plan. The free Spark plan does NOT support Cloud Functions.
 
-#### Option A: Upgrade via Firebase Console (Recommended)
+#### Upgrade via Firebase Console
 
 1. Go to [Firebase Console](https://console.firebase.google.com)
 2. Select your project
@@ -120,15 +97,6 @@ Enable the following APIs (APIs & Services → Library → Search & Enable):
    - Add or select a billing account
    - Set a budget alert (recommended)
 8. Click **Purchase**
-
-#### Option B: Upgrade via Project Settings
-
-1. Go to [Firebase Console](https://console.firebase.google.com)
-2. Select your project
-3. At the bottom of the left sidebar, you'll see your current plan (Spark)
-4. Click **Upgrade**
-5. Select **Blaze** plan
-6. Complete the billing setup
 
 #### Verify Billing is Active
 
@@ -159,12 +127,13 @@ The Blaze plan is pay-as-you-go with generous free tiers:
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
 2. Select your Firebase project
 3. Navigate to **IAM & Admin** → **Service Accounts**
-4. Find the service account named: `firebase-adminsdk-xxxxx@<project-id>.iam.gserviceaccount.com`
+4. Find the service account named: `firebase-adminsdk-xxxxx@<your-project-id>.iam.gserviceaccount.com`
+   - This is auto-created when you create a Firebase project
 
 ### Step 2: Assign Required Roles
 
 1. Go to **IAM & Admin** → **IAM**
-2. Find the Firebase Admin SDK service account
+2. Find the Firebase Admin SDK service account (the one from Step 1)
 3. Click the **Edit** (pencil) icon
 4. Add the following roles by clicking **+ Add another role**:
 
@@ -174,9 +143,11 @@ The Blaze plan is pay-as-you-go with generous free tiers:
 | **Service Account Token Creator** | Create authentication tokens |
 | **Editor** | General project access (includes most needed permissions) |
 
+5. Click **Save**
+
 **Alternative (More Granular Permissions)**:
 
-If you prefer least-privilege access instead of Editor role:
+If you prefer least-privilege access instead of Editor role, use these roles:
 
 | Role | Purpose |
 |------|---------|
@@ -189,9 +160,6 @@ If you prefer least-privilege access instead of Editor role:
 | Cloud Build Editor | Build functions |
 | Firebase Hosting Admin | Deploy hosting |
 | Storage Admin | Upload function code |
-| Billing Account Viewer | Check billing status |
-
-5. Click **Save**
 
 ### Step 3: Create Service Account Key
 
@@ -203,16 +171,16 @@ If you prefer least-privilege access instead of Editor role:
 6. Click **Create**
 7. **Save the downloaded JSON file securely** - you'll need it for GitHub
 
-⚠️ **IMPORTANT**: 
+⚠️ **SECURITY WARNING**: 
 - Never commit this key to version control
 - Never share this key publicly
-- Store it securely and delete after adding to GitHub Secrets
+- Store it securely and delete local copy after adding to GitHub Secrets
 
 ---
 
 ## GitHub Secrets Configuration
 
-### Step 1: Add Firebase Service Account Secret
+### Add Firebase Service Account Secret
 
 1. Go to your GitHub repository
 2. Click **Settings** → **Secrets and variables** → **Actions**
@@ -222,13 +190,60 @@ If you prefer least-privilege access instead of Editor role:
    - **Secret**: Paste the **entire contents** of the downloaded JSON key file
 5. Click **Add secret**
 
-### Verification
+### Verification Checklist
 
 Ensure the secret value:
-- Starts with `{`
-- Ends with `}`
-- Contains no extra whitespace before/after
-- Is the complete JSON (not truncated)
+- ✅ Starts with `{`
+- ✅ Ends with `}`
+- ✅ Contains no extra whitespace before or after the JSON
+- ✅ Is the complete JSON (not truncated)
+
+---
+
+## Project Configuration
+
+Before deploying, update the project configuration files with your Firebase Project ID.
+
+### Step 1: Update `.firebaserc`
+
+Edit the `.firebaserc` file in the project root:
+
+```json
+{
+  "projects": {
+    "default": "<your-firebase-project-id>"
+  }
+}
+```
+
+**Replace** `<your-firebase-project-id>` with your actual Firebase Project ID.
+
+### Step 2: Update GitHub Actions Workflow
+
+Edit `.github/workflows/firebase-deploy.yml` and find the PR preview section:
+
+```yaml
+# Deploy preview for Pull Requests (hosting only)
+- name: Deploy PR Preview
+  if: github.event_name == 'pull_request'
+  uses: FirebaseExtended/action-hosting-deploy@v0
+  with:
+    repoToken: '${{ secrets.GITHUB_TOKEN }}'
+    firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+    projectId: <your-firebase-project-id>    # ← Update this line
+    expires: 7d
+    channelId: pr-${{ github.event.pull_request.number }}
+```
+
+**Replace** `<your-firebase-project-id>` with your actual Firebase Project ID.
+
+### Step 3: Commit and Push Changes
+
+```bash
+git add .firebaserc .github/workflows/firebase-deploy.yml
+git commit -m "Configure Firebase project ID"
+git push origin main
+```
 
 ---
 
@@ -249,17 +264,18 @@ git push origin main
 1. Go to your GitHub repository
 2. Click **Actions** tab
 3. Watch the "Deploy to Firebase" workflow
+4. Wait for all steps to complete (green checkmarks)
 
 ### Check Live URLs
 
-After successful deployment:
+After successful deployment, your app will be available at:
 
 | Resource | URL |
 |----------|-----|
-| Web App | `https://<project-id>.web.app` |
-| Web App (alt) | `https://<project-id>.firebaseapp.com` |
-| API Users | `https://<project-id>.web.app/api/users` |
-| API Health | `https://<project-id>.web.app/api/health` |
+| Web App | `https://<your-project-id>.web.app` |
+| Web App (alt) | `https://<your-project-id>.firebaseapp.com` |
+| API Users | `https://<your-project-id>.web.app/api/users` |
+| API Health | `https://<your-project-id>.web.app/api/health` |
 
 ---
 
@@ -268,24 +284,30 @@ After successful deployment:
 ### On Push to Main Branch
 
 When code is pushed/merged to `main`:
-1. ✅ Checkout code
-2. ✅ Setup Node.js 20
-3. ✅ Install frontend dependencies
-4. ✅ Build Angular app
-5. ✅ Install functions dependencies
-6. ✅ Deploy to Firebase Hosting (production)
-7. ✅ Deploy Firebase Functions (production)
+
+| Step | Action |
+|------|--------|
+| 1 | ✅ Checkout code |
+| 2 | ✅ Setup Node.js 20 |
+| 3 | ✅ Install frontend dependencies |
+| 4 | ✅ Build Angular app |
+| 5 | ✅ Install functions dependencies |
+| 6 | ✅ Deploy to Firebase Hosting (production) |
+| 7 | ✅ Deploy Firebase Functions (production) |
 
 ### On Pull Request to Main Branch
 
 When a PR is created targeting `main`:
-1. ✅ Checkout code
-2. ✅ Setup Node.js 20
-3. ✅ Install frontend dependencies
-4. ✅ Build Angular app
-5. ✅ Install functions dependencies
-6. ✅ Create Preview Channel (temporary hosting URL)
-7. ⏭️ Functions are NOT deployed (to protect production)
+
+| Step | Action |
+|------|--------|
+| 1 | ✅ Checkout code |
+| 2 | ✅ Setup Node.js 20 |
+| 3 | ✅ Install frontend dependencies |
+| 4 | ✅ Build Angular app |
+| 5 | ✅ Install functions dependencies |
+| 6 | ✅ Create Preview Channel (temporary hosting URL) |
+| 7 | ⏭️ Functions are NOT deployed (to protect production) |
 
 The preview URL will be posted as a comment on the PR and expires after **7 days**.
 
@@ -293,15 +315,16 @@ The preview URL will be posted as a comment on the PR and expires after **7 days
 
 ## Troubleshooting
 
-### Common Issues
+### Common Errors and Solutions
 
 | Error | Solution |
 |-------|----------|
-| `CREDENTIALS_MISSING` | Re-check the service account JSON in GitHub Secrets |
-| `Cloud Billing API not enabled` | Enable Cloud Billing API in Google Cloud Console |
-| `Permission denied` | Add missing roles to service account |
-| `npm ci requires lock file` | Workflow uses `npm install` instead |
-| `Functions deployment failed` | Ensure Blaze plan is active |
+| `CREDENTIALS_MISSING` | Re-check the service account JSON in GitHub Secrets. Ensure it's complete and properly formatted. |
+| `Cloud Billing API not enabled` | Enable Cloud Billing API in Google Cloud Console → APIs & Services → Library |
+| `Permission denied` | Add missing roles to the service account in IAM |
+| `npm ci requires lock file` | The workflow uses `npm install` instead, which doesn't require a lock file |
+| `Functions deployment failed` | Ensure Blaze plan is active and billing account is linked |
+| `HTTP 401 Unauthorized` | Regenerate service account key and update GitHub Secret |
 
 ### Re-running Failed Workflows
 
@@ -309,47 +332,36 @@ The preview URL will be posted as a comment on the PR and expires after **7 days
 2. Click on the failed workflow run
 3. Click **Re-run all jobs**
 
+### Checking Logs
+
+1. Go to GitHub **Actions** tab
+2. Click on the workflow run
+3. Click on the failed step to expand logs
+4. Look for error messages at the bottom
+
 ---
 
-## Project Configuration Files
+## Project Files Reference
 
-### Key Files
+### Key Configuration Files
 
 | File | Purpose |
 |------|---------|
 | `.github/workflows/firebase-deploy.yml` | CI/CD workflow definition |
-| `firebase.json` | Firebase hosting and functions config |
+| `firebase.json` | Firebase hosting and functions configuration |
 | `.firebaserc` | Firebase project ID mapping |
 | `functions/src/index.ts` | API endpoint definitions |
-
-### Updating Project ID
-
-If using a different Firebase project, update:
-
-1. **`.firebaserc`**:
-```json
-{
-  "projects": {
-    "default": "your-project-id"
-  }
-}
-```
-
-2. **`.github/workflows/firebase-deploy.yml`** (PR preview section):
-```yaml
-projectId: your-project-id
-```
+| `angular.json` | Angular CLI configuration |
 
 ---
 
-## Support
+## Additional Resources
 
-For issues with:
-- **Firebase**: [Firebase Documentation](https://firebase.google.com/docs)
-- **GitHub Actions**: [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- **Google Cloud IAM**: [IAM Documentation](https://cloud.google.com/iam/docs)
+- [Firebase Documentation](https://firebase.google.com/docs)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [Google Cloud IAM Documentation](https://cloud.google.com/iam/docs)
+- [Angular Documentation](https://angular.dev)
 
 ---
 
-*Last Updated: December 2024*
-
+*Document Version: 1.0 | Last Updated: December 2024*

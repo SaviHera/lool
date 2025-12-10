@@ -207,22 +207,69 @@ Edit the `.firebaserc` file in the project root:
 
 ### Step 2: Update GitHub Actions Workflow
 
-Edit `.github/workflows/firebase-deploy.yml` and find the PR preview section:
+Edit `.github/workflows/firebase-deploy.yml` with the complete content below:
 
 ```yaml
-# Deploy preview for Pull Requests (hosting only)
-- name: Deploy PR Preview
-  if: github.event_name == 'pull_request'
-  uses: FirebaseExtended/action-hosting-deploy@v0
-  with:
-    repoToken: '${{ secrets.GITHUB_TOKEN }}'
-    firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-    projectId: <your-firebase-project-id>    # ← Update this line
-    expires: 7d
-    channelId: pr-${{ github.event.pull_request.number }}
+name: Deploy to Firebase
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Install and build frontend
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build
+
+      # Install functions dependencies
+      - name: Install functions dependencies
+        run: cd functions && npm install
+
+      # Deploy to production (main branch only)
+      - name: Deploy to Production
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting,functions --force
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      # Deploy preview for Pull Requests (hosting only)
+      - name: Deploy PR Preview
+        if: github.event_name == 'pull_request'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: <your-firebase-project-id>    # ← UPDATE THIS
+          expires: 7d
+          channelId: pr-${{ github.event.pull_request.number }}
 ```
 
-**Replace** `<your-firebase-project-id>` with your actual Firebase Project ID.
+**Replace** `<your-firebase-project-id>` (line 55) with your actual Firebase Project ID.
 
 ### Step 3: Commit and Push Changes
 

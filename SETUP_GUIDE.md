@@ -39,7 +39,7 @@ This document provides step-by-step instructions for setting up a complete CI/CD
 │                         GitHub Repository                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│   feature/* ──PR──► develop ──────► DEV Firebase Project            │
+│   feature/* ──PR──► developer ────► DEV Firebase Project            │
 │                         │                                            │
 │                         ▼ (PR + Approval)                           │
 │                     preprod ──────► PREPROD Firebase Project        │
@@ -52,7 +52,7 @@ This document provides step-by-step instructions for setting up a complete CI/CD
 
 | Environment | Branch | Firebase Project | Purpose |
 |-------------|--------|------------------|---------|
-| Development | `develop` | `<app>-dev` | Developer testing |
+| Development | `developer` | `<app>-dev` | Developer testing |
 | Pre-Production | `preprod` | `<app>-preprod` | QA/Tester validation |
 | Production | `main` | `<app>-prod` | Live users |
 
@@ -103,23 +103,23 @@ After pushing to `main`, create the environment branches:
 **Via GitHub UI:**
 1. Go to your repository on GitHub
 2. Click the branch dropdown (shows `main`)
-3. Type `develop` in the search box
-4. Click **"Create branch: develop from main"**
+3. Type `developer` in the search box
+4. Click **"Create branch: developer from main"**
 5. Repeat for `preprod` branch
 
 **Or via Git commands:**
 ```bash
-# Create develop branch
-git checkout -b develop
-git push -u origin develop
+# Create developer branch
+git checkout -b developer
+git push -u origin developer
 
 # Create preprod branch
 git checkout main
 git checkout -b preprod
 git push -u origin preprod
 
-# Return to develop for day-to-day work
-git checkout develop
+# Return to developer for day-to-day work
+git checkout developer
 ```
 
 ---
@@ -293,8 +293,8 @@ Create 3 environments:
 
 Go to: **Repository** → **Settings** → **Branches** → **Add branch protection rule**
 
-#### For `develop` branch:
-- **Branch name pattern**: `develop`
+#### For `developer` branch:
+- **Branch name pattern**: `developer`
 - ✅ Require a pull request before merging
 - ✅ Require approvals: `1`
 - Click **Create**
@@ -343,12 +343,12 @@ name: Deploy to Firebase
 on:
   push:
     branches:
-      - develop
+      - developer
       - preprod
       - main
   pull_request:
     branches:
-      - develop
+      - developer
       - preprod
       - main
 
@@ -397,7 +397,7 @@ jobs:
   # ============================================
   deploy-dev:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/developer'
     runs-on: ubuntu-latest
     environment: development
     steps:
@@ -504,7 +504,7 @@ jobs:
 ```bash
 git add .firebaserc .github/workflows/firebase-deploy.yml
 git commit -m "Configure multi-environment deployment"
-git push origin develop
+git push origin developer
 ```
 
 ---
@@ -514,13 +514,13 @@ git push origin develop
 ### Test DEV Deployment
 
 ```bash
-# Make sure you're on develop branch
-git checkout develop
+# Make sure you're on developer branch
+git checkout developer
 
 # Make a small change and push
 git add .
 git commit -m "Test DEV deployment"
-git push origin develop
+git push origin developer
 ```
 
 Check GitHub **Actions** tab - you should see deployment to DEV environment.
@@ -546,9 +546,9 @@ API endpoints follow the same pattern:
 ### Daily Development Flow
 
 ```bash
-# 1. Create feature branch from develop
-git checkout develop
-git pull origin develop
+# 1. Create feature branch from developer
+git checkout developer
+git pull origin developer
 git checkout -b feature/my-new-feature
 
 # 2. Make changes, commit, push
@@ -556,7 +556,7 @@ git add .
 git commit -m "Add new feature"
 git push origin feature/my-new-feature
 
-# 3. Create PR: feature/my-new-feature → develop
+# 3. Create PR: feature/my-new-feature → developer
 #    (Do this in GitHub UI)
 
 # 4. After PR approval and merge → Auto-deploys to DEV
@@ -568,7 +568,7 @@ When DEV is stable and ready for testing:
 
 **Via GitHub UI (Recommended):**
 1. Go to GitHub → **Pull requests** → **New pull request**
-2. Set **base**: `preprod`, **compare**: `develop`
+2. Set **base**: `preprod`, **compare**: `developer`
 3. Click **Create pull request**
 4. Add description of changes being promoted
 5. Request reviews from required approvers
@@ -579,7 +579,7 @@ When DEV is stable and ready for testing:
 ```bash
 git checkout preprod
 git pull origin preprod
-git merge develop
+git merge developer
 git push origin preprod
 ```
 
@@ -609,12 +609,12 @@ git push origin main
 ```
 Week 1: Development
 ────────────────────────────────────────────────────
-feature/login ──PR──► develop ──► 🚀 DEV
-feature/signup ──PR──► develop ──► 🚀 DEV
+feature/login ──PR──► developer ──► 🚀 DEV
+feature/signup ──PR──► developer ──► 🚀 DEV
 
 Week 2: Testing
 ────────────────────────────────────────────────────
-develop ──PR──► preprod ──► 🚀 PREPROD
+developer ──PR──► preprod ──► 🚀 PREPROD
                    │
                    └── QA team tests the app
 
@@ -629,7 +629,7 @@ preprod ──PR──► main ──► 🚀 PRODUCTION
 
 ## CI/CD Workflow Behavior
 
-### On Push to `develop` Branch
+### On Push to `developer` Branch
 
 | Step | Action |
 |------|--------|
@@ -719,7 +719,7 @@ Preview URLs expire after **7 days**.
 
 | Branch | Deploys To | Auto-Deploy |
 |--------|-----------|-------------|
-| `develop` | DEV | Yes |
+| `developer` | DEV | Yes |
 | `preprod` | PREPROD | Yes (with approval) |
 | `main` | PROD | Yes (with approval) |
 

@@ -1,20 +1,22 @@
 # Setup Guide: Angular + Firebase CI/CD Pipeline
 
-This document provides step-by-step instructions for setting up a complete CI/CD infrastructure for an Angular application with Firebase Hosting and Cloud Functions.
+This document provides step-by-step instructions for setting up a complete CI/CD infrastructure for an Angular application with Firebase Hosting and Cloud Functions, featuring **multi-environment deployment** (Development → Pre-Production → Production).
 
 ---
 
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [GitHub Repository Setup](#github-repository-setup)
-3. [Firebase Project Setup](#firebase-project-setup)
-4. [Service Account Configuration](#service-account-configuration)
-5. [GitHub Secrets Configuration](#github-secrets-configuration)
-6. [Project Configuration](#project-configuration)
-7. [Verify Deployment](#verify-deployment)
-8. [CI/CD Workflow Behavior](#cicd-workflow-behavior)
-9. [Troubleshooting](#troubleshooting)
+2. [Architecture Overview](#architecture-overview)
+3. [GitHub Repository Setup](#github-repository-setup)
+4. [Firebase Projects Setup](#firebase-projects-setup)
+5. [Service Account Configuration](#service-account-configuration)
+6. [GitHub Configuration](#github-configuration)
+7. [Project Configuration Files](#project-configuration-files)
+8. [Verify Deployment](#verify-deployment)
+9. [Code Promotion Flow](#code-promotion-flow)
+10. [CI/CD Workflow Behavior](#cicd-workflow-behavior)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -26,6 +28,33 @@ This document provides step-by-step instructions for setting up a complete CI/CD
 - **Credit/Debit card for Firebase Blaze plan** (required for Cloud Functions)
   - Note: Blaze plan is pay-as-you-go with generous free tiers
   - Typical cost for small projects: $0/month (within free tier)
+  - Required for **each** Firebase project (DEV, PREPROD, PROD)
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         GitHub Repository                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   feature/* ──PR──► develop ──────► DEV Firebase Project            │
+│                         │                                            │
+│                         ▼ (PR + Approval)                           │
+│                     preprod ──────► PREPROD Firebase Project        │
+│                         │                                            │
+│                         ▼ (PR + Approval)                           │
+│                      main ────────► PROD Firebase Project           │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+| Environment | Branch | Firebase Project | Purpose |
+|-------------|--------|------------------|---------|
+| Development | `develop` | `<app>-dev` | Developer testing |
+| Pre-Production | `preprod` | `<app>-preprod` | QA/Tester validation |
+| Production | `main` | `<app>-prod` | Live users |
 
 ---
 
@@ -67,28 +96,64 @@ git remote add origin https://github.com/<username>/<repo-name>.git
 git push -u origin main
 ```
 
+### Step 3: Create Environment Branches
+
+After pushing to `main`, create the environment branches:
+
+**Via GitHub UI:**
+1. Go to your repository on GitHub
+2. Click the branch dropdown (shows `main`)
+3. Type `develop` in the search box
+4. Click **"Create branch: develop from main"**
+5. Repeat for `preprod` branch
+
+**Or via Git commands:**
+```bash
+# Create develop branch
+git checkout -b develop
+git push -u origin develop
+
+# Create preprod branch
+git checkout main
+git checkout -b preprod
+git push -u origin preprod
+
+# Return to develop for day-to-day work
+git checkout develop
+```
+
 ---
 
-## Firebase Project Setup
+## Firebase Projects Setup
 
-### Step 1: Create Firebase Project
+You need to create **3 separate Firebase projects** - one for each environment.
+
+### Step 1: Create Firebase Projects
+
+Repeat these steps **3 times** for DEV, PREPROD, and PROD:
 
 1. Go to [Firebase Console](https://console.firebase.google.com)
 2. Click **Create a project** (or **Add project**)
-3. Enter your project name
+3. Enter project name using this naming convention:
+   - DEV: `<your-app-name>-dev`
+   - PREPROD: `<your-app-name>-preprod`
+   - PROD: `<your-app-name>-prod`
 4. Choose whether to enable Google Analytics (optional)
 5. Click **Create project**
-6. Wait for project creation to complete
-7. **Note down the Project ID** (visible in Project Settings) - you'll need this later
+6. **Note down each Project ID** - you'll need these later
 
-### Step 2: Upgrade to Blaze Plan (Required for Functions)
+| Environment | Example Project Name | Example Project ID |
+|-------------|---------------------|-------------------|
+| DEV | myapp-dev | myapp-dev-12345 |
+| PREPROD | myapp-preprod | myapp-preprod-67890 |
+| PROD | myapp-prod | myapp-prod-11111 |
 
-⚠️ **IMPORTANT**: Firebase Functions require the **Blaze (pay-as-you-go)** billing plan. The free Spark plan does NOT support Cloud Functions.
+### Step 2: Upgrade Each Project to Blaze Plan
 
-#### Upgrade via Firebase Console
+⚠️ **IMPORTANT**: Firebase Functions require the **Blaze (pay-as-you-go)** billing plan. Repeat for **each** project.
 
 1. Go to [Firebase Console](https://console.firebase.google.com)
-2. Select your project
+2. Select the project
 3. In the left sidebar, click on the **gear icon** ⚙️ → **Usage and billing**
 4. Click on **Details & settings**
 5. Click **Modify plan**
@@ -98,16 +163,11 @@ git push -u origin main
    - Set a budget alert (recommended)
 8. Click **Purchase**
 
-#### Verify Billing is Active
+**Repeat for all 3 projects** (DEV, PREPROD, PROD).
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Select your project
-3. Go to **Billing**
-4. Confirm a billing account is linked and active
+### Cost Considerations
 
-#### Cost Considerations
-
-The Blaze plan is pay-as-you-go with generous free tiers:
+The Blaze plan is pay-as-you-go with generous free tiers per project:
 
 | Service | Free Tier (per month) |
 |---------|----------------------|
@@ -116,24 +176,29 @@ The Blaze plan is pay-as-you-go with generous free tiers:
 | Firebase Hosting Storage | 10 GB |
 | Firebase Hosting Transfer | 360 MB/day |
 
-💡 **Tip**: Set up budget alerts in Google Cloud Console to monitor spending.
+💡 **Tip**: Set up budget alerts in Google Cloud Console to monitor spending for each project.
 
 ---
 
 ## Service Account Configuration
 
+Configure service accounts for **each** Firebase project (DEV, PREPROD, PROD).
+
 ### Step 1: Locate Firebase Service Account
 
+For each project:
+
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Select your Firebase project
+2. Select the Firebase project from the dropdown
 3. Navigate to **IAM & Admin** → **Service Accounts**
-4. Find the service account named: `firebase-adminsdk-xxxxx@<your-project-id>.iam.gserviceaccount.com`
-   - This is auto-created when you create a Firebase project
+4. Find the service account named: `firebase-adminsdk-xxxxx@<project-id>.iam.gserviceaccount.com`
 
 ### Step 2: Assign Required Roles
 
+For each project's service account:
+
 1. Go to **IAM & Admin** → **IAM**
-2. Find the Firebase Admin SDK service account (the one from Step 1)
+2. Find the Firebase Admin SDK service account
 3. Click the **Edit** (pencil) icon
 4. Add the following roles by clicking **+ Add another role**:
 
@@ -146,9 +211,13 @@ The Blaze plan is pay-as-you-go with generous free tiers:
 
 5. Click **Save**
 
-⚠️ **Note**: All 4 roles are required. The Editor role alone is NOT sufficient - Firebase has its own permission system separate from GCP.
+⚠️ **Note**: All 4 roles are required. The Editor role alone is NOT sufficient.
 
-### Step 3: Create Service Account Key
+**Repeat for all 3 projects.**
+
+### Step 3: Create Service Account Keys
+
+For each project:
 
 1. Go to **IAM & Admin** → **Service Accounts**
 2. Click on the Firebase Admin SDK service account
@@ -156,40 +225,96 @@ The Blaze plan is pay-as-you-go with generous free tiers:
 4. Click **Add Key** → **Create new key**
 5. Select **JSON** format
 6. Click **Create**
-7. **Save the downloaded JSON file securely** - you'll need it for GitHub
+7. Save the downloaded JSON file with a clear name:
+   - `service-account-dev.json`
+   - `service-account-preprod.json`
+   - `service-account-prod.json`
 
 ⚠️ **SECURITY WARNING**: 
-- Never commit this key to version control
-- Never share this key publicly
-- Store it securely and delete local copy after adding to GitHub Secrets
+- Never commit these keys to version control
+- Never share these keys publicly
+- Store securely and delete local copies after adding to GitHub Secrets
 
 ---
 
-## GitHub Secrets Configuration
+## GitHub Configuration
 
-### Add Firebase Service Account Secret
+### Step 1: Add GitHub Secrets
 
-1. Go to your GitHub repository
-2. Click **Settings** → **Secrets and variables** → **Actions**
-3. Click **New repository secret**
-4. Configure:
-   - **Name**: `FIREBASE_SERVICE_ACCOUNT`
-   - **Secret**: Paste the **entire contents** of the downloaded JSON key file
-5. Click **Add secret**
+Go to: **Repository** → **Settings** → **Secrets and variables** → **Actions**
 
-### Verification Checklist
+Click **New repository secret** and add these 3 secrets:
 
-Ensure the secret value:
+| Secret Name | Value |
+|-------------|-------|
+| `FIREBASE_SA_DEV` | Paste entire contents of `service-account-dev.json` |
+| `FIREBASE_SA_PREPROD` | Paste entire contents of `service-account-preprod.json` |
+| `FIREBASE_SA_PROD` | Paste entire contents of `service-account-prod.json` |
+
+**Verification Checklist** for each secret:
 - ✅ Starts with `{`
 - ✅ Ends with `}`
-- ✅ Contains no extra whitespace before or after the JSON
-- ✅ Is the complete JSON (not truncated)
+- ✅ No extra whitespace before or after
+- ✅ Complete JSON (not truncated)
+
+### Step 2: Create GitHub Environments
+
+Go to: **Repository** → **Settings** → **Environments**
+
+Create 3 environments:
+
+#### Environment 1: `development`
+1. Click **New environment**
+2. Name: `development`
+3. Click **Configure environment**
+4. No additional settings needed (auto-deploys)
+5. Click **Save protection rules**
+
+#### Environment 2: `preprod`
+1. Click **New environment**
+2. Name: `preprod`
+3. Click **Configure environment**
+4. Under **Deployment protection rules**:
+   - ✅ Check **Required reviewers**
+   - Add team members who can approve preprod deployments
+5. Click **Save protection rules**
+
+#### Environment 3: `production`
+1. Click **New environment**
+2. Name: `production`
+3. Click **Configure environment**
+4. Under **Deployment protection rules**:
+   - ✅ Check **Required reviewers**
+   - Add team leads/managers who can approve production
+   - (Optional) ✅ Check **Wait timer** and set 5-10 minutes
+5. Click **Save protection rules**
+
+### Step 3: Set Branch Protection Rules
+
+Go to: **Repository** → **Settings** → **Branches** → **Add branch protection rule**
+
+#### For `develop` branch:
+- **Branch name pattern**: `develop`
+- ✅ Require a pull request before merging
+- ✅ Require approvals: `1`
+- Click **Create**
+
+#### For `preprod` branch:
+- **Branch name pattern**: `preprod`
+- ✅ Require a pull request before merging
+- ✅ Require approvals: `1` or `2`
+- Click **Create**
+
+#### For `main` branch:
+- **Branch name pattern**: `main`
+- ✅ Require a pull request before merging
+- ✅ Require approvals: `2`
+- ✅ Dismiss stale pull request approvals when new commits are pushed
+- Click **Create**
 
 ---
 
-## Project Configuration
-
-Before deploying, update the project configuration files with your Firebase Project ID.
+## Project Configuration Files
 
 ### Step 1: Update `.firebaserc`
 
@@ -198,16 +323,19 @@ Edit the `.firebaserc` file in the project root:
 ```json
 {
   "projects": {
-    "default": "<your-firebase-project-id>"
+    "dev": "<your-dev-project-id>",
+    "preprod": "<your-preprod-project-id>",
+    "prod": "<your-prod-project-id>",
+    "default": "<your-dev-project-id>"
   }
 }
 ```
 
-**Replace** `<your-firebase-project-id>` with your actual Firebase Project ID.
+**Replace** the placeholder values with your actual Firebase Project IDs.
 
 ### Step 2: Update GitHub Actions Workflow
 
-Edit `.github/workflows/firebase-deploy.yml` with the complete content below:
+Create/Edit `.github/workflows/firebase-deploy.yml` with the following content:
 
 ```yaml
 name: Deploy to Firebase
@@ -215,19 +343,29 @@ name: Deploy to Firebase
 on:
   push:
     branches:
+      - develop
+      - preprod
       - main
   pull_request:
     branches:
+      - develop
+      - preprod
       - main
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      checks: write
-      contents: read
-      pull-requests: write
+env:
+  # ============================================
+  # UPDATE THESE WITH YOUR FIREBASE PROJECT IDs
+  # ============================================
+  FIREBASE_PROJECT_DEV: <your-dev-project-id>
+  FIREBASE_PROJECT_PREPROD: <your-preprod-project-id>
+  FIREBASE_PROJECT_PROD: <your-prod-project-id>
 
+jobs:
+  # ============================================
+  # BUILD JOB
+  # ============================================
+  build:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -237,113 +375,304 @@ jobs:
         with:
           node-version: '20'
 
-      # Install and build frontend
       - name: Install frontend dependencies
         run: npm install
 
       - name: Build frontend
         run: npm run build
 
-      # Install functions dependencies
       - name: Install functions dependencies
         run: cd functions && npm install
 
-      # Deploy to production (main branch only)
-      - name: Deploy to Production
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            dist/
+            functions/
+
+  # ============================================
+  # DEVELOPMENT DEPLOYMENT
+  # ============================================
+  deploy-dev:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Deploy to DEV
         uses: w9jds/firebase-action@master
         with:
-          args: deploy --only hosting,functions --force
+          args: deploy --only hosting,functions --force --project ${{ env.FIREBASE_PROJECT_DEV }}
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SA_DEV }}
 
-      # Deploy preview for Pull Requests (hosting only)
+  # ============================================
+  # PRE-PRODUCTION DEPLOYMENT
+  # ============================================
+  deploy-preprod:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/preprod'
+    runs-on: ubuntu-latest
+    environment: preprod
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Deploy to PREPROD
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting,functions --force --project ${{ env.FIREBASE_PROJECT_PREPROD }}
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SA_PREPROD }}
+
+  # ============================================
+  # PRODUCTION DEPLOYMENT
+  # ============================================
+  deploy-prod:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Deploy to PRODUCTION
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting,functions --force --project ${{ env.FIREBASE_PROJECT_PROD }}
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SA_PROD }}
+
+  # ============================================
+  # PR PREVIEW (Deploys to DEV project)
+  # ============================================
+  deploy-preview:
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
       - name: Deploy PR Preview
-        if: github.event_name == 'pull_request'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          projectId: <your-firebase-project-id>    # ← UPDATE THIS
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SA_DEV }}'
+          projectId: ${{ env.FIREBASE_PROJECT_DEV }}
           expires: 7d
           channelId: pr-${{ github.event.pull_request.number }}
 ```
 
-**Replace** `<your-firebase-project-id>` (line 55) with your actual Firebase Project ID.
+**Update the 3 project IDs** at the top of the file:
+- `FIREBASE_PROJECT_DEV`
+- `FIREBASE_PROJECT_PREPROD`
+- `FIREBASE_PROJECT_PROD`
 
 ### Step 3: Commit and Push Changes
 
 ```bash
 git add .firebaserc .github/workflows/firebase-deploy.yml
-git commit -m "Configure Firebase project ID"
-git push origin main
+git commit -m "Configure multi-environment deployment"
+git push origin develop
 ```
 
 ---
 
 ## Verify Deployment
 
-### Trigger Deployment
-
-Push any change to the `main` branch to trigger deployment:
+### Test DEV Deployment
 
 ```bash
+# Make sure you're on develop branch
+git checkout develop
+
+# Make a small change and push
 git add .
-git commit -m "Trigger deployment"
-git push origin main
+git commit -m "Test DEV deployment"
+git push origin develop
 ```
 
-### Monitor Deployment
-
-1. Go to your GitHub repository
-2. Click **Actions** tab
-3. Watch the "Deploy to Firebase" workflow
-4. Wait for all steps to complete (green checkmarks)
+Check GitHub **Actions** tab - you should see deployment to DEV environment.
 
 ### Check Live URLs
 
-After successful deployment, your app will be available at:
+After successful deployments, your apps will be available at:
 
-| Resource | URL |
-|----------|-----|
-| Web App | `https://<your-project-id>.web.app` |
-| Web App (alt) | `https://<your-project-id>.firebaseapp.com` |
-| API Users | `https://<your-project-id>.web.app/api/users` |
-| API Health | `https://<your-project-id>.web.app/api/health` |
+| Environment | URL |
+|-------------|-----|
+| DEV | `https://<dev-project-id>.web.app` |
+| PREPROD | `https://<preprod-project-id>.web.app` |
+| PROD | `https://<prod-project-id>.web.app` |
+
+API endpoints follow the same pattern:
+- `https://<project-id>.web.app/api/users`
+- `https://<project-id>.web.app/api/health`
+
+---
+
+## Code Promotion Flow
+
+### Daily Development Flow
+
+```bash
+# 1. Create feature branch from develop
+git checkout develop
+git pull origin develop
+git checkout -b feature/my-new-feature
+
+# 2. Make changes, commit, push
+git add .
+git commit -m "Add new feature"
+git push origin feature/my-new-feature
+
+# 3. Create PR: feature/my-new-feature → develop
+#    (Do this in GitHub UI)
+
+# 4. After PR approval and merge → Auto-deploys to DEV
+```
+
+### Promote to Pre-Production (for Testing)
+
+When DEV is stable and ready for testing:
+
+**Via GitHub UI (Recommended):**
+1. Go to GitHub → **Pull requests** → **New pull request**
+2. Set **base**: `preprod`, **compare**: `develop`
+3. Click **Create pull request**
+4. Add description of changes being promoted
+5. Request reviews from required approvers
+6. After approval, click **Merge pull request**
+7. ✅ Auto-deploys to PREPROD
+
+**Via Git Commands:**
+```bash
+git checkout preprod
+git pull origin preprod
+git merge develop
+git push origin preprod
+```
+
+### Promote to Production (Final Release)
+
+When PREPROD testing is complete:
+
+**Via GitHub UI (Recommended):**
+1. Go to GitHub → **Pull requests** → **New pull request**
+2. Set **base**: `main`, **compare**: `preprod`
+3. Click **Create pull request**
+4. Add release notes/description
+5. Request reviews from required approvers
+6. After approval, click **Merge pull request**
+7. ✅ Auto-deploys to PRODUCTION (may require environment approval)
+
+**Via Git Commands:**
+```bash
+git checkout main
+git pull origin main
+git merge preprod
+git push origin main
+```
+
+### Visual Summary
+
+```
+Week 1: Development
+────────────────────────────────────────────────────
+feature/login ──PR──► develop ──► 🚀 DEV
+feature/signup ──PR──► develop ──► 🚀 DEV
+
+Week 2: Testing
+────────────────────────────────────────────────────
+develop ──PR──► preprod ──► 🚀 PREPROD
+                   │
+                   └── QA team tests the app
+
+Week 3: Release
+────────────────────────────────────────────────────
+preprod ──PR──► main ──► 🚀 PRODUCTION
+                  │
+                  └── Requires approval
+```
 
 ---
 
 ## CI/CD Workflow Behavior
 
-### On Push to Main Branch
-
-When code is pushed/merged to `main`:
+### On Push to `develop` Branch
 
 | Step | Action |
 |------|--------|
 | 1 | ✅ Checkout code |
 | 2 | ✅ Setup Node.js 20 |
-| 3 | ✅ Install frontend dependencies |
+| 3 | ✅ Install dependencies |
 | 4 | ✅ Build Angular app |
-| 5 | ✅ Install functions dependencies |
-| 6 | ✅ Deploy to Firebase Hosting (production) |
-| 7 | ✅ Deploy Firebase Functions (production) |
+| 5 | ✅ Deploy to DEV Firebase (hosting + functions) |
 
-### On Pull Request to Main Branch
-
-When a PR is created targeting `main`:
+### On Push to `preprod` Branch
 
 | Step | Action |
 |------|--------|
 | 1 | ✅ Checkout code |
 | 2 | ✅ Setup Node.js 20 |
-| 3 | ✅ Install frontend dependencies |
+| 3 | ✅ Install dependencies |
 | 4 | ✅ Build Angular app |
-| 5 | ✅ Install functions dependencies |
-| 6 | ✅ Create Preview Channel (temporary hosting URL) |
-| 7 | ⏭️ Functions are NOT deployed (to protect production) |
+| 5 | ⏸️ Wait for environment approval (if configured) |
+| 6 | ✅ Deploy to PREPROD Firebase (hosting + functions) |
 
-The preview URL will be posted as a comment on the PR and expires after **7 days**.
+### On Push to `main` Branch
+
+| Step | Action |
+|------|--------|
+| 1 | ✅ Checkout code |
+| 2 | ✅ Setup Node.js 20 |
+| 3 | ✅ Install dependencies |
+| 4 | ✅ Build Angular app |
+| 5 | ⏸️ Wait for environment approval (if configured) |
+| 6 | ✅ Deploy to PROD Firebase (hosting + functions) |
+
+### On Pull Request (Any Branch)
+
+| Step | Action |
+|------|--------|
+| 1 | ✅ Checkout code |
+| 2 | ✅ Setup Node.js 20 |
+| 3 | ✅ Install dependencies |
+| 4 | ✅ Build Angular app |
+| 5 | ✅ Create Preview Channel on DEV project |
+| 6 | ✅ Post preview URL as PR comment |
+
+Preview URLs expire after **7 days**.
 
 ---
 
@@ -353,12 +682,13 @@ The preview URL will be posted as a comment on the PR and expires after **7 days
 
 | Error | Solution |
 |-------|----------|
-| `CREDENTIALS_MISSING` | Re-check the service account JSON in GitHub Secrets. Ensure it's complete and properly formatted. |
-| `Cloud Billing API not enabled` | Enable Cloud Billing API in Google Cloud Console → APIs & Services → Library |
-| `Permission denied` | Add missing roles to the service account in IAM |
-| `npm ci requires lock file` | The workflow uses `npm install` instead, which doesn't require a lock file |
-| `Functions deployment failed` | Ensure Blaze plan is active and billing account is linked |
-| `HTTP 401 Unauthorized` | Regenerate service account key and update GitHub Secret |
+| `CREDENTIALS_MISSING` | Re-check the service account JSON in GitHub Secrets. Ensure it's complete. |
+| `Cloud Billing API not enabled` | Enable Cloud Billing API in Google Cloud Console for that project. |
+| `Permission denied` | Add all 4 required roles to the service account. |
+| `npm ci requires lock file` | The workflow uses `npm install` instead. |
+| `Functions deployment failed` | Ensure Blaze plan is active on the target project. |
+| `HTTP 401 Unauthorized` | Regenerate service account key and update GitHub Secret. |
+| `Environment approval pending` | Check GitHub Actions - someone needs to approve the deployment. |
 
 ### Re-running Failed Workflows
 
@@ -366,26 +696,39 @@ The preview URL will be posted as a comment on the PR and expires after **7 days
 2. Click on the failed workflow run
 3. Click **Re-run all jobs**
 
-### Checking Logs
+### Checking Deployment Logs
 
 1. Go to GitHub **Actions** tab
 2. Click on the workflow run
-3. Click on the failed step to expand logs
-4. Look for error messages at the bottom
+3. Click on the specific job (deploy-dev, deploy-preprod, deploy-prod)
+4. Expand failed steps to see error details
 
 ---
 
-## Project Files Reference
+## Quick Reference
 
-### Key Configuration Files
+### GitHub Secrets
 
-| File | Purpose |
-|------|---------|
-| `.github/workflows/firebase-deploy.yml` | CI/CD workflow definition |
-| `firebase.json` | Firebase hosting and functions configuration |
-| `.firebaserc` | Firebase project ID mapping |
-| `functions/src/index.ts` | API endpoint definitions |
-| `angular.json` | Angular CLI configuration |
+| Secret Name | Purpose |
+|-------------|---------|
+| `FIREBASE_SA_DEV` | Service account for DEV project |
+| `FIREBASE_SA_PREPROD` | Service account for PREPROD project |
+| `FIREBASE_SA_PROD` | Service account for PROD project |
+
+### Branches
+
+| Branch | Deploys To | Auto-Deploy |
+|--------|-----------|-------------|
+| `develop` | DEV | Yes |
+| `preprod` | PREPROD | Yes (with approval) |
+| `main` | PROD | Yes (with approval) |
+
+### Required Service Account Roles
+
+1. Editor
+2. Firebase Admin
+3. Firebase Admin SDK Administrator
+4. Service Account Token Creator
 
 ---
 
@@ -393,9 +736,10 @@ The preview URL will be posted as a comment on the PR and expires after **7 days
 
 - [Firebase Documentation](https://firebase.google.com/docs)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [GitHub Environments Documentation](https://docs.github.com/en/actions/deployment/targeting-different-environments)
 - [Google Cloud IAM Documentation](https://cloud.google.com/iam/docs)
 - [Angular Documentation](https://angular.dev)
 
 ---
 
-*Document Version: 1.0 | Last Updated: December 2024*
+*Document Version: 2.0 | Last Updated: December 2024*
